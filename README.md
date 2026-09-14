@@ -1,6 +1,6 @@
 # Prometheus Stack Setup Guide
 
-Setup guide for Prometheus, Node Exporter, Alertmanager, and Grafana on Ubuntu.
+Setup guide for Prometheus, Node Exporter, Alertmanager, Grafana on Ubuntu, and Windows Exporter on Windows.
 
 ---
 
@@ -10,6 +10,7 @@ Setup guide for Prometheus, Node Exporter, Alertmanager, and Grafana on Ubuntu.
 - [Node Exporter](#2-node-exporter)
 - [Alertmanager](#3-alertmanager)
 - [Grafana](#4-grafana)
+- [Windows Exporter](#5-windows-exporter)
 
 ---
 
@@ -235,3 +236,86 @@ http://localhost:3000
 ```
 
 > Default credentials: `admin` / `admin` (change on first login)
+
+---
+
+## 5. Windows Exporter
+
+### Download .msi
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/prometheus-community/windows_exporter/releases/download/v0.31.8/windows_exporter-0.31.8-amd64.msi" `
+  -OutFile "C:\Users\Administrator\windows_exporter-0.31.8-amd64.msi"
+```
+
+### Verify Hash
+
+```powershell
+Get-FileHash C:\Users\Administrator\windows_exporter-0.31.8-amd64.msi -Algorithm SHA256
+```
+
+### Install
+
+```powershell
+msiexec /i C:\Users\Administrator\windows_exporter-0.31.8-amd64.msi /quiet `
+  ENABLED_COLLECTORS="cpu,cs,logical_disk,memory,net,os,service,system,process,tcp"
+```
+
+### Check Service Status
+
+```powershell
+Get-Service windows_exporter
+```
+
+### Configure Service ImagePath
+
+```powershell
+$regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\windows_exporter"
+Set-ItemProperty -Path $regPath -Name "ImagePath" -Value `
+  "`"C:\Program Files\windows_exporter\windows_exporter.exe`" --config.file=`"C:\Program Files\windows_exporter\config.yaml`""
+```
+
+### Start Service
+
+```powershell
+Start-Service windows_exporter
+Get-Service windows_exporter
+```
+
+### Firewall Rule
+
+```powershell
+New-NetFirewallRule -DisplayName "Windows Exporter 9182" `
+  -Direction Inbound -Protocol TCP -LocalPort 9182 -Action Allow
+```
+
+### Verify Firewall Rule
+
+```powershell
+Get-NetFirewallRule -DisplayName "*9182*" -ErrorAction SilentlyContinue
+```
+
+### Configure Prometheus to Scrape Windows Exporter
+
+Edit `/etc/prometheus/prometheus.yml` and add the target:
+
+```yaml
+scrape_configs:
+  - job_name: 'windows_exporter'
+    static_configs:
+      - targets: ['toyota-core.itrack.gr:9182']
+        labels:
+          instance: 'toyota-core'
+```
+
+Then restart Prometheus:
+
+```bash
+sudo systemctl restart prometheus
+```
+
+### Metrics Endpoint
+
+```
+http://<windows_host>:9182/metrics
+```
